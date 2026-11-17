@@ -366,7 +366,7 @@
   const SESSION_COOKIE_KEY = "TSPSC_G4_P1_CLOUD_SESSION";
   const PAPER_TAG = "_G4P1";
   const EXAM_DURATION_MINS = 150;
-  const LOBBY_WAIT_MS = 5 * 60 * 1000; // 5 Minutes Check-in Window
+  const LOBBY_WAIT_MS = 5 * 60 * 1000;
 
   function translateServerMsg(msg) {
     if (!msg) return "An unexpected error occurred.";
@@ -399,7 +399,6 @@
   }
 
   function switchRole(role) {
-    if (localStorage.getItem(SESSION_COOKIE_KEY)) return;
     ['student', 'director', 'admin'].forEach(r => {
       document.getElementById(`view-${r}`).style.display = (r === role) ? 'block' : 'none';
       document.getElementById(`tab-${r}`).classList.toggle('active', r === role);
@@ -653,7 +652,6 @@
       return;
     }
 
-    // 5-Minute Pre-Exam Waiting Lobby for Institute Students
     const serverStartMs = Number(res.liveStartedMs || res.live_started_ms || 0);
     const localLobbyKey = `LOBBY_END_${stu.id}`;
     let lobbyEndMs = 0;
@@ -831,8 +829,14 @@
       const res = creds.isDirect
         ? await apiCall({ action: "direct_student_login", ...creds })
         : await apiCall({ action: "student_login", ...creds });
-      if (res.ok) bootStudentFromCloud(res, !!creds.isDirect);
-    } catch (e) {}
+      if (res.ok) {
+        bootStudentFromCloud(res, !!creds.isDirect);
+      } else {
+        localStorage.removeItem(SESSION_COOKIE_KEY);
+      }
+    } catch (e) {
+      localStorage.removeItem(SESSION_COOKIE_KEY);
+    }
   });
 </script>
 </body>
