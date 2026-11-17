@@ -66,6 +66,8 @@
     .lobby-card { text-align: center; padding: 32px 20px; border: 2px solid #c4b5fd; background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%); }
     .lobby-timer { font-size: 3.1rem; font-weight: 800; color: #6d28d9; margin: 14px 0; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
     .lobby-pill { display: inline-block; background: #fef3c7; color: #92400e; padding: 5px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 800; margin-bottom: 10px; }
+    .lobby-rules { text-align: left; max-width: 520px; margin: 16px auto 0; background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 0.82rem; color: #334155; }
+    .lobby-rules li { margin-left: 16px; margin-bottom: 4px; }
 
     /* IMPROVED ATTRACTIVE SCORECARD & STATS STRIP */
     .scorecard-wrap { background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); margin-bottom: 18px; }
@@ -129,7 +131,7 @@
           <div class="form-group"><label>Mobile Number *</label><input type="tel" id="stuPhone" maxlength="10" placeholder="10-digit mobile number"></div>
           <div class="form-group"><label>Personal PIN (2nd Time onwards)</label><input type="password" id="stuPersonalPin" maxlength="4" placeholder="Leave blank if 1st time"></div>
         </div>
-        <button class="btn btn-primary btn-full" id="stuLoginBtn" onclick="studentLogin()">🚀 Start / Continue Group-IV Paper-I</button>
+        <button class="btn btn-primary btn-full" id="stuLoginBtn" onclick="studentLogin()">🚀 Join Lobby / Resume Group-IV Paper-I</button>
       </div>
 
       <!-- MODE B: DIRECT STUDENT (₹5) -->
@@ -153,10 +155,19 @@
       <h2 id="lobbyInstTitle" style="font-size:1.25rem; color:#0f172a; margin-bottom:4px;"></h2>
       <p id="lobbyCandidateInfo" style="font-size:0.9rem; font-weight:700; color:#5b21b6; margin-bottom:10px;"></p>
       <p style="font-size:0.86rem; color:#475569; max-width:520px; margin:0 auto;">
-        You are logged in and verified. The exam will start automatically for all candidates when the 5-minute check-in window ends. Do not close this page.
+        You have checked in successfully. The exam will automatically begin for all checked-in candidates when the 5-minute countdown ends.
       </p>
       <div class="lobby-timer" id="lobbyCountdownDisplay">05:00</div>
       <div style="display:inline-block; background:#fef3c7; color:#92400e; padding:6px 14px; border-radius:8px; font-size:0.84rem; font-weight:800;" id="lobbyPinDisplay"></div>
+      <div class="lobby-rules">
+        <strong>📋 Exam Instructions:</strong>
+        <ul style="margin-top:6px;">
+          <li>Total Questions: <strong>150</strong> | Maximum Marks: <strong>150</strong> | Duration: <strong>150 Minutes</strong>.</li>
+          <li>Each correct answer carries <strong>+1 mark</strong>. No negative marking.</li>
+          <li>Your responses are automatically saved to the cloud on every click.</li>
+          <li>Do not refresh or close the browser tab during the countdown.</li>
+        </ul>
+      </div>
     </div>
 
     <!-- EXAM SCREEN -->
@@ -357,6 +368,27 @@
   const EXAM_DURATION_MINS = 150;
   const LOBBY_WAIT_MS = 5 * 60 * 1000; // 5 Minutes Check-in Window
 
+  function translateServerMsg(msg) {
+    if (!msg) return "An unexpected error occurred.";
+    const m = String(msg);
+    if (m.includes("ప్రారంభించలేదు") || m.toLowerCase().includes("not live")) {
+      return "The Institute Director has not started the exam yet. Please wait for your institute to activate the test.";
+    }
+    if (m.includes("హోల్డ్") || m.toLowerCase().includes("hold")) {
+      return "This institute account is currently on hold. Please contact your coaching center.";
+    }
+    if (m.includes("కోడ్") || m.toLowerCase().includes("institute")) {
+      return "Invalid Institute Code. Please verify the code provided by your institute.";
+    }
+    if (m.includes("రోల్") || m.toLowerCase().includes("roll")) {
+      return "Invalid Roll Number. Please enter a roll number within your institute's allotted range.";
+    }
+    if (m.includes("PIN") || m.includes("పిన్")) {
+      return "Invalid Personal PIN or Mobile Number. Contact your Director to reset your PIN.";
+    }
+    return m;
+  }
+
   async function apiCall(payload) {
     const res = await fetch(API_URL, {
       method: "POST",
@@ -392,7 +424,7 @@
 
     if (pin) {
       const res = await apiCall({ action: "direct_student_login", name, phone, pin, paperTag: PAPER_TAG });
-      if (!res.ok) return alert("❌ " + res.error);
+      if (!res.ok) return alert("❌ " + translateServerMsg(res.error));
       localStorage.setItem(SESSION_COOKIE_KEY, JSON.stringify({ isDirect: true, name, phone, pin, paperTag: PAPER_TAG }));
       bootStudentFromCloud(res, true);
       return;
@@ -412,7 +444,7 @@
           paymentId: resp.razorpay_payment_id,
           paperTag: PAPER_TAG
         });
-        if (!res.ok) return alert("❌ " + res.error);
+        if (!res.ok) return alert("❌ " + translateServerMsg(res.error));
         alert(`🎉 Payment Successful!\n\nYour Personal PIN for Group-IV Paper-I: ${res.student.personal_pin}\nSave this PIN to resume or view your scorecard anytime.`);
         localStorage.setItem(SESSION_COOKIE_KEY, JSON.stringify({ isDirect: true, name, phone, pin: res.student.personal_pin, paperTag: PAPER_TAG }));
         bootStudentFromCloud(res, true);
@@ -501,13 +533,13 @@
     const mobile = document.getElementById('dirMobile').value.trim();
     const pin = document.getElementById('dirPin').value.trim();
     const res = await apiCall({ action: "director_login", mobile, pin });
-    if (!res.ok) return alert("❌ " + res.error);
+    if (!res.ok) return alert("❌ " + translateServerMsg(res.error));
     dirCreds = { mobile, pin };
     document.getElementById('directorLoginCard').style.display = 'none';
     document.getElementById('directorDashboard').style.display = 'block';
     renderDirector(res);
     clearInterval(dirPollTimer);
-    dirPollTimer = setInterval(refreshDirectorData, 10000); // Auto-refresh every 10s to monitor student check-ins
+    dirPollTimer = setInterval(refreshDirectorData, 10000);
   }
   async function refreshDirectorData() {
     if (!dirCreds) return;
@@ -536,7 +568,7 @@
     if (dirInstData.exam_live) {
       act.innerHTML = `<button class="btn btn-danger btn-sm" onclick="setExamLive(false, false, '')">⏹️ Stop Exam</button>`;
     } else if (payable === 0 || dirInstData.fee_paid) {
-      act.innerHTML = `<button class="btn btn-success btn-sm" onclick="setExamLive(true, true, '')">▶️ Start Exam (Live)</button>`;
+      act.innerHTML = `<button class="btn btn-success btn-sm" onclick="setExamLive(true, true, '')">▶️ Start Exam (5-Min Lobby)</button>`;
     } else {
       act.innerHTML = `<button class="btn btn-success btn-sm" onclick="payDirectorRazorpay(${payable})">💳 Pay ₹${payable} & Start Exam</button>`;
     }
@@ -544,7 +576,7 @@
     const g4Students = res.students.filter(s => String(s.roll).endsWith(PAPER_TAG));
     document.getElementById('dirLobbyMonitorBadge').innerText = `👥 Checked-In Students: ${g4Students.length}`;
     document.getElementById('directorStudentsBody').innerHTML = g4Students.length === 0
-      ? `<tr><td colspan="7" style="text-align:center;">No students have logged in for Group-IV Paper-I yet.</td></tr>`
+      ? `<tr><td colspan="7" style="text-align:center;">No students have checked in for Group-IV Paper-I yet.</td></tr>`
       : g4Students.map((s, idx) => `<tr>
           <td><strong>#${idx+1}</strong></td><td><strong>${s.roll.replace(PAPER_TAG, '')}</strong></td><td>${s.name}</td>
           <td><strong>${s.total} / ${QUESTIONS.length}</strong></td>
@@ -594,9 +626,9 @@
 
     const taggedRoll = rawRoll + PAPER_TAG;
     const res = await apiCall({ action: "student_login", code, roll: taggedRoll, name, phone, pin });
-    document.getElementById('stuLoginBtn').innerText = "🚀 Start / Continue Group-IV Paper-I";
+    document.getElementById('stuLoginBtn').innerText = "🚀 Join Lobby / Resume Group-IV Paper-I";
 
-    if (!res.ok) return alert("❌ " + res.error);
+    if (!res.ok) return alert("❌ " + translateServerMsg(res.error));
     if (res.isNew) alert(`🎉 Welcome ${name}!\n\nYour Personal PIN for Group-IV Paper-I: ${res.student.personal_pin}\nPlease note down this PIN.`);
 
     localStorage.setItem(SESSION_COOKIE_KEY, JSON.stringify({ isDirect: false, code, roll: taggedRoll, name, phone, pin: res.student.personal_pin }));
@@ -622,8 +654,21 @@
     }
 
     // 5-Minute Pre-Exam Waiting Lobby for Institute Students
-    const liveStartedMs = Number(res.liveStartedMs || res.live_started_ms || 0);
-    const lobbyEndMs = liveStartedMs > 0 ? (liveStartedMs + LOBBY_WAIT_MS) : 0;
+    const serverStartMs = Number(res.liveStartedMs || res.live_started_ms || 0);
+    const localLobbyKey = `LOBBY_END_${stu.id}`;
+    let lobbyEndMs = 0;
+
+    if (serverStartMs > 0) {
+      lobbyEndMs = serverStartMs + LOBBY_WAIT_MS;
+    } else if (!isDirect && Object.keys(answersMap).length === 0) {
+      const savedLobby = Number(localStorage.getItem(localLobbyKey) || 0);
+      if (savedLobby > 0) {
+        lobbyEndMs = savedLobby;
+      } else if (res.isNew) {
+        lobbyEndMs = Date.now() + LOBBY_WAIT_MS;
+        localStorage.setItem(localLobbyKey, String(lobbyEndMs));
+      }
+    }
 
     if (!isDirect && lobbyEndMs > Date.now() && Object.keys(answersMap).length === 0) {
       startWaitingLobby(lobbyEndMs);
@@ -636,7 +681,7 @@
     document.getElementById('waitingLobbyScreen').style.display = 'block';
     document.getElementById('lobbyInstTitle').innerText = stuSession.instName;
     document.getElementById('lobbyCandidateInfo').innerText = `Roll No: ${stuSession.roll} • ${stuSession.name}`;
-    document.getElementById('lobbyPinDisplay').innerText = `🔑 Your Personal PIN: ${stuSession.pin}`;
+    document.getElementById('lobbyPinDisplay').innerText = `🔑 Personal PIN: ${stuSession.pin}`;
 
     clearInterval(lobbyInterval);
     function tickLobby() {
